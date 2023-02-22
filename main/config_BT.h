@@ -210,6 +210,7 @@ public:
     MHO_C401,
     DT24_BLE,
     XMWSDJ04MMC,
+    K25,
     MAX,
   };
 };
