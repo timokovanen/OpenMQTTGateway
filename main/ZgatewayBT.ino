@@ -680,7 +680,6 @@ void BLEconnect() {
           } else if (p->sensorModel_id == BLEconectable::id::K25) {
             K25_connect BLEclient(addr);
             BLEclient.processActions(BLEactions);
-            //BLEclient.publishData();
           } else {
             GENERIC_connect BLEclient(addr);
             if (BLEclient.processActions(BLEactions)) {
@@ -699,7 +698,8 @@ void BLEconnect() {
                     p->sensorModel_id != TheengsDecoder::BLE_ID_NUM::HHCCJCY01HHCC &&
                     p->sensorModel_id != BLEconectable::id::LYWSD03MMC &&
                     p->sensorModel_id != BLEconectable::id::MHO_C401 &&
-                    p->sensorModel_id != BLEconectable::id::XMWSDJ04MMC) {
+                    p->sensorModel_id != BLEconectable::id::XMWSDJ04MMC &&
+                    p->sensorModel_id != BLEconectable::id::K25) {
                   // if irregulary connected to and connection failed clear the connect flag.
                   p->connect = false;
                 }
@@ -1120,6 +1120,7 @@ void immediateBTAction(void* pvParameters) {
 
       // Unlock here to allow the action to be performed
       ProcessLock = false;
+      Log.trace(F("Calling BLEconnect" CR));
       BLEconnect();
       // back to normal
       std::swap(devices, dev_swap);

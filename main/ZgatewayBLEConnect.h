@@ -76,7 +76,6 @@ public:
 };
 
 class K25_connect : public zBLEConnect {
-  uint8_t m_notifyVal;
   std::vector<uint8_t> m_data;
   void notifyCB(NimBLERemoteCharacteristic* pChar, uint8_t* pData, size_t length, bool isNotify);
 

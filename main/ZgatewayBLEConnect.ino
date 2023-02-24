@@ -21,7 +21,7 @@ NimBLERemoteCharacteristic* zBLEConnect::getCharacteristic(const NimBLEUUID& ser
     BLERemoteService* pRemoteService = m_pClient->getService(service);
 
     if (!pRemoteService) {
-      Log.trace(F("DEBUG: Forcing getServices(true)" CR));
+      Log.trace(F("Forcing getServices(true)" CR));
       m_pClient->getServices(true);
       pRemoteService = m_pClient->getService(service);
     }
@@ -428,14 +428,18 @@ void K25_connect::notifyCB(NimBLERemoteCharacteristic* pChar, uint8_t* pData, si
   if (!ProcessLock) {
     Log.trace(F("Callback from %s characteristic" CR), pChar->getUUID().toString().c_str());
     if (length) {
-      Log.trace(F("DEBUG: Callback data length: %d" CR), length);
+      Log.trace(F("Callback data length: %d" CR), length);
     }
     if (length == 20) {
       m_data.assign(pData, pData + length);
       return;
-    } else if (m_data.size() == 20 && length == 4) {
+    } else {
+      if (m_data.size() == 20) {
       m_data.insert(m_data.end(), pData, pData + length);
-    
+      } else {
+        m_data.assign(pData, pData + length);
+      }
+
       JsonObject BLEdata = getBTJsonObject();
       String mac_address = m_pClient->getPeerAddress().toString().c_str();
       mac_address.toUpperCase();
@@ -452,9 +456,6 @@ void K25_connect::notifyCB(NimBLERemoteCharacteristic* pChar, uint8_t* pData, si
       }
       BLEdata["frame"] = (char*)frame.c_str();
       pubBT(BLEdata);
-    } else {
-      Log.notice(F("Invalid notification data" CR));
-      return;
     }
   } else {
     Log.trace(F("Callback process canceled by processLock" CR));
@@ -483,8 +484,6 @@ bool K25_connect::processActions(std::vector<BLEAction>& actions) {
           if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
                                               std::placeholders::_1, std::placeholders::_2,
                                               std::placeholders::_3, std::placeholders::_4))) {
-            Log.trace(F("DEBUG: Writing Data %s" CR), it.value.c_str());
-            Log.trace(F("DEBUG: it.value length %d" CR), it.value.length());
             int len = it.value.length();
             if (len % 2) {
               Log.error(F("Invalid HEX value length" CR));
@@ -519,7 +518,7 @@ bool K25_connect::processActions(std::vector<BLEAction>& actions) {
       if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
                                           std::placeholders::_1, std::placeholders::_2,
                                           std::placeholders::_3, std::placeholders::_4))) {
-        Log.trace(F("DEBUG: PING" CR));
+        Log.trace(F("Ping" CR));
         result = pChar->writeValue(ping, 6, false);
         m_taskHandle = xTaskGetCurrentTaskHandle();
         if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
