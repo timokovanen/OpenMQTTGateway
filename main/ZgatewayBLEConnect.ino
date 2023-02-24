@@ -472,92 +472,65 @@ bool K25_connect::processActions(std::vector<BLEAction>& actions) {
 
   bool result = false;
 
-  // if (actions.size() > 0) {
-  //   for (auto& it : actions) {
-  //     if (NimBLEAddress(it.addr) == m_pClient->getPeerAddress()) {
-  //       NimBLERemoteCharacteristic* pChar = getCharacteristic(serviceUUID, charUUID);
-  //       NimBLERemoteCharacteristic* pNotifyChar = getCharacteristic(serviceUUID, notifyCharUUID);
+  if (actions.size() > 0) {
+    for (auto& it : actions) {
+      if (NimBLEAddress(it.addr) == m_pClient->getPeerAddress()) {
+        NimBLERemoteCharacteristic* pChar = getCharacteristic(serviceUUID, charUUID);
+        NimBLERemoteCharacteristic* pNotifyChar = getCharacteristic(serviceUUID, notifyCharUUID);
 
-  //       if (it.write && pChar && pNotifyChar) {
-  //         Log.trace(F("Registering notification" CR));
-  //         if (pNotifyChar->subscribe(true,
-  //                                     std::bind(&K25_connect::notifyCB,
-  //                                               this, std::placeholders::_1, std::placeholders::_2,
-  //                                               std::placeholders::_3, std::placeholders::_4)
-  //                                     )) {
-  //             // if (it.value == "on") {
-  //             // result = pChar->writeValue(ON, 3, false);
-  //             // } else {
-  //             //   result = pChar->writeValue(OFF, 3, false);
-  //             // }
+        if (it.write && pChar && pNotifyChar && pNotifyChar->canNotify()) {
+          Log.trace(F("Registering notification" CR));
+          if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
+                                              std::placeholders::_1, std::placeholders::_2,
+                                              std::placeholders::_3, std::placeholders::_4))) {
+            Log.trace(F("DEBUG: Writing Data %s" CR), it.value.c_str());
+            Log.trace(F("DEBUG: it.value length %d" CR), it.value.length());
+            int len = it.value.length();
+            if (len % 2) {
+              Log.error(F("Invalid HEX value length" CR));
+              return false;
+            }
 
-  //             // Log.trace(F("DEBUG: Writing Data %s" CR), it.value.c_str());
-  //             // Log.trace(F("DEBUG: it.value length %d" CR), it.value.length());
-  //             // int len = it.value.length();
-  //             // if (len % 2) {
-  //             //   Log.error(F("Invalid HEX value length" CR));
-  //             //   return false;
-  //             // }
+            std::vector<uint8_t> buf;
+            for (auto i = 0; i < len; i += 2) {
+              std::string temp = it.value.substr(i, 2);
+              buf.push_back((uint8_t)strtoul(temp.c_str(), nullptr, 16));
+            }
+            result = pChar->writeValue((const uint8_t*)&buf[0], buf.size(), !pChar->canWriteNoResponse());
+  
+            m_taskHandle = xTaskGetCurrentTaskHandle();
+            if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
+              m_taskHandle = nullptr;
+            }
+          } else {
+            Log.notice(F("Failed registering notification" CR));
+          }
 
-  //             // std::vector<uint8_t> buf;
-  //             // for (auto i = 0; i < len; i += 2) {
-  //             //   std::string temp = it.value.substr(i, 2);
-  //             //   buf.push_back((uint8_t)strtoul(temp.c_str(), nullptr, 16));
-  //             // }
-  //             //result = pChar->writeValue((const uint8_t*)&buf[0], buf.size(), !pChar->canWriteNoResponse());
-  //             Log.trace(F("DEBUG: PING" CR));
-  //             result = pChar->writeValue(ping, 6, false);
-
-
-  //             m_taskHandle = xTaskGetCurrentTaskHandle();
-  //             if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
-  //               m_taskHandle = nullptr;
-  //             }
-
-  //             // if (result) {
-  //             //   m_taskHandle = xTaskGetCurrentTaskHandle();
-  //             //   if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
-  //             //     m_taskHandle = nullptr;
-  //             //   }
-  //             //   result = m_notifyVal == 0x01;
-  //             // }
-  //         } else {
-  //             Log.notice(F("Failed registering notification" CR));
-  //         }
-          
-  //       }
-
-  //       it.complete = result;
-  //       // if (result || it.ttl <= 1) {
-  //       //   JsonObject BLEresult = getBTJsonObject();
-  //       //   BLEresult["id"] = it.addr;
-  //       //   BLEresult["state"] = result ? it.value : it.value == "on" ? "off" : "on";
-  //       //   pubBT(BLEresult);
-  //       // }
-  //     }
-  //   }
-  // }
-
-
-  NimBLERemoteCharacteristic* pChar = getCharacteristic(serviceUUID, charUUID);
-  NimBLERemoteCharacteristic* pNotifyChar = getCharacteristic(serviceUUID, notifyCharUUID);
-
-
-  if (pChar && pNotifyChar && pNotifyChar->canNotify()) {
-    Log.trace(F("Registering notification" CR));
-    if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
-                                         std::placeholders::_1, std::placeholders::_2,
-                                         std::placeholders::_3, std::placeholders::_4))) {
-      Log.trace(F("DEBUG: PING" CR));
-      result = pChar->writeValue(ping, 6, false);
-      m_taskHandle = xTaskGetCurrentTaskHandle();
-      if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
-        m_taskHandle = nullptr;
+          it.complete = result;
+        }
       }
-    } else {
-      Log.notice(F("Failed registering notification" CR));
+    }
+  } else {
+    NimBLERemoteCharacteristic* pChar = getCharacteristic(serviceUUID, charUUID);
+    NimBLERemoteCharacteristic* pNotifyChar = getCharacteristic(serviceUUID, notifyCharUUID);
+
+    if (pChar && pNotifyChar && pNotifyChar->canNotify()) {
+      Log.trace(F("Registering notification" CR));
+      if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
+                                          std::placeholders::_1, std::placeholders::_2,
+                                          std::placeholders::_3, std::placeholders::_4))) {
+        Log.trace(F("DEBUG: PING" CR));
+        result = pChar->writeValue(ping, 6, false);
+        m_taskHandle = xTaskGetCurrentTaskHandle();
+        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
+          m_taskHandle = nullptr;
+        }
+      } else {
+        Log.notice(F("Failed registering notification" CR));
+      }
     }
   }
+
   return result;
 }
 
