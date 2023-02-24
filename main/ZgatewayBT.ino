@@ -677,6 +677,10 @@ void BLEconnect() {
           } else if (p->sensorModel_id == TheengsDecoder::BLE_ID_NUM::SBS1) {
             SBS1_connect BLEclient(addr);
             BLEclient.processActions(BLEactions);
+          } else if (p->sensorModel_id == BLEconectable::id::K25) {
+            K25_connect BLEclient(addr);
+            BLEclient.processActions(BLEactions);
+            //BLEclient.publishData();
           } else {
             GENERIC_connect BLEclient(addr);
             if (BLEclient.processActions(BLEactions)) {
@@ -1044,6 +1048,8 @@ void process_bledata(JsonObject& BLEdata) {
         model_id = BLEconectable::id::MHO_C401;
       else if (name.compare("XMWSDJ04MMC") == 0)
         model_id = BLEconectable::id::XMWSDJ04MMC;
+      else if (name.compare("A1-4XXXXXXXXXXX") == 0)
+        model_id = BLEconectable::id::K25;
 
       if (model_id > 0) {
         Log.trace(F("Connectable device found: %s" CR), name.c_str());

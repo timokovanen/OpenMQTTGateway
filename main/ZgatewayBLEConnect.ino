@@ -19,6 +19,13 @@ NimBLERemoteCharacteristic* zBLEConnect::getCharacteristic(const NimBLEUUID& ser
     Log.error(F("Connect to: %s failed" CR), m_pClient->getPeerAddress().toString().c_str());
   } else {
     BLERemoteService* pRemoteService = m_pClient->getService(service);
+
+    if (!pRemoteService) {
+      Log.trace(F("DEBUG: Forcing getServices(true)" CR));
+      m_pClient->getServices(true);
+      pRemoteService = m_pClient->getService(service);
+    }
+
     if (!pRemoteService) {
       Log.notice(F("Failed to find service UUID: %s" CR), service.toString().c_str());
     } else {
@@ -411,6 +418,144 @@ bool SBS1_connect::processActions(std::vector<BLEAction>& actions) {
     }
   }
 
+  return result;
+}
+
+/*------------------------------K25 HANDLING-------------------------*/
+void K25_connect::notifyCB(NimBLERemoteCharacteristic* pChar, uint8_t* pData, size_t length, bool isNotify) {
+  if (m_taskHandle == nullptr) {
+    return; // unexpected notification
+  }
+  if (!ProcessLock) {
+    Log.trace(F("Callback from %s characteristic" CR), pChar->getUUID().toString().c_str());
+    if (length) {
+      Log.trace(F("DEBUG: Callback data length: %d" CR), length);
+    }
+    if (length == 20) {
+      m_data.assign(pData, pData + length);
+      return;
+    } else if (m_data.size() == 20 && length == 4) {
+      m_data.insert(m_data.end(), pData, pData + length);
+    
+      // tähän prosessi
+
+    } else {
+      Log.notice(F("Invalid notification data" CR));
+      return;
+    }
+  } else {
+    Log.trace(F("Callback process canceled by processLock" CR));
+  }
+
+  xTaskNotifyGive(m_taskHandle);
+}
+
+bool K25_connect::processActions(std::vector<BLEAction>& actions) {
+  NimBLEUUID serviceUUID("00001234-0000-1000-8000-00805f9b34fb");
+  NimBLEUUID notifyCharUUID("00001236-0000-1000-8000-00805f9b34fb");
+  NimBLEUUID charUUID("00001235-0000-1000-8000-00805f9b34fb");
+
+  static byte ping[] = {0xfe, 0xfe, 0x03, 0x01, 0x02, 0x00};
+
+  bool result = false;
+
+  // if (actions.size() > 0) {
+  //   for (auto& it : actions) {
+  //     if (NimBLEAddress(it.addr) == m_pClient->getPeerAddress()) {
+  //       NimBLERemoteCharacteristic* pChar = getCharacteristic(serviceUUID, charUUID);
+  //       NimBLERemoteCharacteristic* pNotifyChar = getCharacteristic(serviceUUID, notifyCharUUID);
+
+  //       if (it.write && pChar && pNotifyChar) {
+  //         Log.trace(F("Registering notification" CR));
+  //         if (pNotifyChar->subscribe(true,
+  //                                     std::bind(&K25_connect::notifyCB,
+  //                                               this, std::placeholders::_1, std::placeholders::_2,
+  //                                               std::placeholders::_3, std::placeholders::_4)
+  //                                     )) {
+  //             // if (it.value == "on") {
+  //             // result = pChar->writeValue(ON, 3, false);
+  //             // } else {
+  //             //   result = pChar->writeValue(OFF, 3, false);
+  //             // }
+
+  //             // Log.trace(F("DEBUG: Writing Data %s" CR), it.value.c_str());
+  //             // Log.trace(F("DEBUG: it.value length %d" CR), it.value.length());
+  //             // int len = it.value.length();
+  //             // if (len % 2) {
+  //             //   Log.error(F("Invalid HEX value length" CR));
+  //             //   return false;
+  //             // }
+
+  //             // std::vector<uint8_t> buf;
+  //             // for (auto i = 0; i < len; i += 2) {
+  //             //   std::string temp = it.value.substr(i, 2);
+  //             //   buf.push_back((uint8_t)strtoul(temp.c_str(), nullptr, 16));
+  //             // }
+  //             //result = pChar->writeValue((const uint8_t*)&buf[0], buf.size(), !pChar->canWriteNoResponse());
+  //             Log.trace(F("DEBUG: PING" CR));
+  //             result = pChar->writeValue(ping, 6, false);
+
+
+  //             m_taskHandle = xTaskGetCurrentTaskHandle();
+  //             if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
+  //               m_taskHandle = nullptr;
+  //             }
+
+  //             // if (result) {
+  //             //   m_taskHandle = xTaskGetCurrentTaskHandle();
+  //             //   if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
+  //             //     m_taskHandle = nullptr;
+  //             //   }
+  //             //   result = m_notifyVal == 0x01;
+  //             // }
+  //         } else {
+  //             Log.notice(F("Failed registering notification" CR));
+  //         }
+          
+  //       }
+
+  //       it.complete = result;
+  //       // if (result || it.ttl <= 1) {
+  //       //   JsonObject BLEresult = getBTJsonObject();
+  //       //   BLEresult["id"] = it.addr;
+  //       //   BLEresult["state"] = result ? it.value : it.value == "on" ? "off" : "on";
+  //       //   pubBT(BLEresult);
+  //       // }
+  //     }
+  //   }
+  // }
+
+
+  NimBLERemoteCharacteristic* pChar = getCharacteristic(serviceUUID, charUUID);
+  NimBLERemoteCharacteristic* pNotifyChar = getCharacteristic(serviceUUID, notifyCharUUID);
+
+
+  if (pChar && pNotifyChar && pNotifyChar->canNotify()) {
+    Log.trace(F("Registering notification" CR));
+    if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
+                                         std::placeholders::_1, std::placeholders::_2,
+                                         std::placeholders::_3, std::placeholders::_4))) {
+      Log.trace(F("DEBUG: PING" CR));
+      result = pChar->writeValue(ping, 6, false);
+      m_taskHandle = xTaskGetCurrentTaskHandle();
+      if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
+        m_taskHandle = nullptr;
+      }
+    } else {
+      Log.notice(F("Failed registering notification" CR));
+    }
+    // if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
+    //                                      std::placeholders::_1, std::placeholders::_2,
+    //                                      std::placeholders::_3, std::placeholders::_4))) {
+    //   m_taskHandle = xTaskGetCurrentTaskHandle();
+    //   if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
+    //     m_taskHandle = nullptr;
+    //   }
+    // } else {
+    //   Log.notice(F("Failed registering notification" CR));
+    // }
+
+  }
   return result;
 }
 
