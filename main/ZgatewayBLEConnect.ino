@@ -51,7 +51,6 @@ bool zBLEConnect::writeData(BLEAction* action) {
           Log.error(F("Invalid HEX value length" CR));
           return false;
         }
-
         std::vector<uint8_t> buf;
         for (auto i = 0; i < len; i += 2) {
           std::string temp = action->value.substr(i, 2);
@@ -437,8 +436,22 @@ void K25_connect::notifyCB(NimBLERemoteCharacteristic* pChar, uint8_t* pData, si
     } else if (m_data.size() == 20 && length == 4) {
       m_data.insert(m_data.end(), pData, pData + length);
     
-      // tähän prosessi
+      JsonObject BLEdata = getBTJsonObject();
+      String mac_address = m_pClient->getPeerAddress().toString().c_str();
+      mac_address.toUpperCase();
+      BLEdata["model"] = "K25";
+      BLEdata["id"] = (char*)mac_address.c_str();
 
+      std::string frame;
+      frame.resize(m_data.size() * 2);
+      const char letters[] = "0123456789ABCDEF";
+      char* current_hex_char = &frame[0];
+      for (uint8_t b : m_data) {
+          *current_hex_char++ = letters[b >> 4];
+          *current_hex_char++ = letters[b & 0xf];
+      }
+      BLEdata["frame"] = (char*)frame.c_str();
+      pubBT(BLEdata);
     } else {
       Log.notice(F("Invalid notification data" CR));
       return;
@@ -544,17 +557,6 @@ bool K25_connect::processActions(std::vector<BLEAction>& actions) {
     } else {
       Log.notice(F("Failed registering notification" CR));
     }
-    // if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
-    //                                      std::placeholders::_1, std::placeholders::_2,
-    //                                      std::placeholders::_3, std::placeholders::_4))) {
-    //   m_taskHandle = xTaskGetCurrentTaskHandle();
-    //   if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
-    //     m_taskHandle = nullptr;
-    //   }
-    // } else {
-    //   Log.notice(F("Failed registering notification" CR));
-    // }
-
   }
   return result;
 }
