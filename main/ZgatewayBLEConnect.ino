@@ -509,24 +509,24 @@ bool K25_connect::processActions(std::vector<BLEAction>& actions) {
         }
       }
     }
-  } else {
-    NimBLERemoteCharacteristic* pChar = getCharacteristic(serviceUUID, charUUID);
-    NimBLERemoteCharacteristic* pNotifyChar = getCharacteristic(serviceUUID, notifyCharUUID);
+  } 
 
-    if (pChar && pNotifyChar && pNotifyChar->canNotify()) {
-      Log.trace(F("Registering notification" CR));
-      if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
-                                          std::placeholders::_1, std::placeholders::_2,
-                                          std::placeholders::_3, std::placeholders::_4))) {
-        Log.trace(F("Ping" CR));
-        result = pChar->writeValue(ping, 6, false);
-        m_taskHandle = xTaskGetCurrentTaskHandle();
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
-          m_taskHandle = nullptr;
-        }
-      } else {
-        Log.notice(F("Failed registering notification" CR));
+  NimBLERemoteCharacteristic* pChar = getCharacteristic(serviceUUID, charUUID);
+  NimBLERemoteCharacteristic* pNotifyChar = getCharacteristic(serviceUUID, notifyCharUUID);
+  
+  if (pChar && pNotifyChar && pNotifyChar->canNotify()) {
+    Log.trace(F("Registering notification" CR));
+    if (pNotifyChar->subscribe(true, std::bind(&K25_connect::notifyCB, this,
+                                        std::placeholders::_1, std::placeholders::_2,
+                                        std::placeholders::_3, std::placeholders::_4))) {
+      Log.trace(F("Ping" CR));
+      result = pChar->writeValue(ping, 6, false);
+      m_taskHandle = xTaskGetCurrentTaskHandle();
+      if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BLE_CNCT_TIMEOUT)) == pdFALSE) {
+        m_taskHandle = nullptr;
       }
+    } else {
+      Log.notice(F("Failed registering notification" CR));
     }
   }
 
